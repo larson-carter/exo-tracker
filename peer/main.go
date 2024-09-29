@@ -12,10 +12,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const heartbeatInterval = 10 * time.Second // Interval for sending heartbeats
+
 func main() {
-	// Load the .env file
-	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
-	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
+	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
+	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
@@ -28,6 +29,14 @@ func main() {
 
 	// Register the peer with the tracker
 	registerPeer(peerID, peerIP, peerPort, trackerURL)
+
+	// Periodically send heartbeats
+	go func() {
+		for {
+			sendHeartbeat(peerID, trackerURL)
+			time.Sleep(heartbeatInterval) // Wait before sending the next heartbeat
+		}
+	}()
 
 	// Periodically fetch and send messages to other peers
 	go func() {
@@ -78,6 +87,23 @@ func registerPeer(peerID, peerIP, peerPort, trackerURL string) {
 	defer res.Body.Close()
 
 	log.Printf("Peer %s registered with tracker at %s\n", peerID, trackerURL)
+}
+
+// Send heartbeats to the tracker
+func sendHeartbeat(peerID, trackerURL string) {
+	heartbeatData := map[string]string{
+		"id": peerID,
+	}
+
+	heartbeatJSON, _ := json.Marshal(heartbeatData)
+	res, err := http.Post(trackerURL+"/heartbeat", "application/json", bytes.NewBuffer(heartbeatJSON))
+	if err != nil {
+		log.Printf("Failed to send heartbeat for peer %s: %v\n", peerID, err)
+		return
+	}
+	defer res.Body.Close()
+
+	log.Printf("Sent heartbeat for peer %s\n", peerID)
 }
 
 // Fetch peers from the tracker
