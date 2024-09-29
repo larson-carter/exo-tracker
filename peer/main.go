@@ -15,8 +15,8 @@ import (
 const heartbeatInterval = 10 * time.Second // Interval for sending heartbeats
 
 func main() {
-	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
-	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
+	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
+	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}

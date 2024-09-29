@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS peers (
+    id VARCHAR(255) PRIMARY KEY,
+    ip VARCHAR(50) NOT NULL,
+    port VARCHAR(10) NOT NULL,
+    last_heartbeat TIMESTAMP DEFAULT NOW()
+);
