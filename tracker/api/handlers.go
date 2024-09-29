@@ -119,23 +119,46 @@ func RegisterPeer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-// HeartbeatPeer handler to receive heartbeats
 func HeartbeatPeer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var peer models.Peer
-	if err := json.NewDecoder(r.Body).Decode(&peer); err != nil {
+	// Read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		log.Printf("Failed to read body: %v\n", err)
+		return
+	}
+
+	// Print the raw JSON
+	log.Printf("Raw heartbeat JSON: %s\n", string(body))
+
+	// Use a map to unmarshal the JSON
+	var peerData map[string]interface{}
+	if err := json.Unmarshal(body, &peerData); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
+		log.Printf("Failed to decode peer data: %v\n", err)
+		return
+	}
+
+	// Check for both lowercase and uppercase keys for flexibility
+	peerID, ok := peerData["id"].(string)
+	if !ok {
+		peerID, _ = peerData["ID"].(string) // Fallback to uppercase if lowercase is not found
+	}
+
+	if peerID == "" {
+		http.Error(w, "Missing peer ID", http.StatusBadRequest)
+		log.Printf("Missing peer ID in heartbeat request")
 		return
 	}
 
 	mu.Lock()
-	peerTimestamps[peer.ID] = time.Now() // Update heartbeat timestamp
-	log.Printf("Received heartbeat from peer: %s\n", peer.ID)
-
+	peerTimestamps[peerID] = time.Now() // Update heartbeat timestamp
+	log.Printf("Received heartbeat from peer: %s\n", peerID)
 	mu.Unlock()
 
 	w.WriteHeader(http.StatusOK)
