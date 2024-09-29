@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -71,6 +72,13 @@ func RegisterPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate that the peer ID (node_id) is not empty
+	if peer.ID == "" {
+		http.Error(w, "Invalid peer ID", http.StatusBadRequest)
+		log.Println("Received peer with empty ID")
+		return
+	}
+
 	// Convert device capabilities to JSON
 	deviceCapabilitiesJSON, err := json.Marshal(peer.DeviceCapabilities)
 	if err != nil {
@@ -96,7 +104,7 @@ func RegisterPeer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cache peer in Redis
-	err = rdb.Set(ctx, peer.ID, peer.IP+":"+string(peer.Port), 0).Err()
+	err = rdb.Set(ctx, peer.ID, peer.IP+":"+strconv.Itoa(peer.Port), 0).Err()
 	if err != nil {
 		http.Error(w, "Redis error", http.StatusInternalServerError)
 		log.Printf("Failed to cache peer in Redis: %v\n", err)
