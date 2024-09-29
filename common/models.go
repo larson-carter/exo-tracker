@@ -1,8 +1,8 @@
 package models
 
-// Peer struct definition
 type Peer struct {
-	ID   string `json:"id"`
-	IP   string `json:"ip"`
-	Port string `json:"port"`
+	ID                 string                 `json:"node_id"`
+	IP                 string                 `json:"ip"`
+	Port               int                    `json:"port"` // Change to int
+	DeviceCapabilities map[string]interface{} `json:"device_capabilities"`
 }
