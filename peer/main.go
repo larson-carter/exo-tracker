@@ -4,31 +4,42 @@ import (
 	"bytes"
 	"encoding/json"
 	"exo-tracker/peer/models"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/pion/stun"
 )
 
 const heartbeatInterval = 10 * time.Second // Interval for sending heartbeats
 
 func main() {
-	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
-	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
+	err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env.peer2")
+	//err := godotenv.Load("/Users/larsoncarter/Documents/GIT-REPOS/exo-tracker/peer/.env")
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
 
 	// Get environment variables from the .env file
 	peerID := os.Getenv("PEER_ID")
-	peerIP := os.Getenv("PEER_IP")
 	peerPort := os.Getenv("PEER_PORT")
 	trackerURL := os.Getenv("TRACKER_URL")
+	stunServer := os.Getenv("STUN_SERVER") // STUN server from .env
 
-	// Register the peer with the tracker
-	registerPeer(peerID, peerIP, peerPort, trackerURL)
+	// Discover public IP using STUN
+	publicIP, publicPort, err := discoverPublicIP(stunServer)
+	if err != nil {
+		log.Fatalf("Failed to discover public IP: %v\n", err)
+	}
+
+	log.Printf("Discovered public IP: %s, public port: %d\n", publicIP, publicPort)
+
+	// Register the peer with the tracker using public IP and port
+	registerPeer(peerID, publicIP, publicPort, trackerURL)
 
 	// Periodically send heartbeats
 	go func() {
@@ -65,18 +76,67 @@ func main() {
 	http.HandleFunc("/message", handleMessage)
 
 	// Start the peer service
-	log.Printf("Peer service %s running on port %s...", peerID, peerPort)
+	log.Printf("Peer service %s running on public port %d...", peerID, publicPort)
 	if err := http.ListenAndServe(":"+peerPort, nil); err != nil {
 		log.Fatal(err)
 	}
 }
 
+func discoverPublicIP(stunServer string) (string, int, error) {
+	if stunServer == "" {
+		return "", 0, fmt.Errorf("STUN server address is empty")
+	}
+
+	// Log the STUN server address
+	log.Printf("Using STUN server: %s\n", stunServer)
+
+	// Connect to the STUN server
+	conn, err := net.Dial("udp", stunServer)
+	if err != nil {
+		return "", 0, fmt.Errorf("Failed to connect to STUN server: %v", err)
+	}
+	defer conn.Close()
+
+	// Create a STUN client
+	client, err := stun.NewClient(conn)
+	if err != nil {
+		return "", 0, fmt.Errorf("Failed to create STUN client: %v", err)
+	}
+	defer client.Close()
+
+	// Build the STUN request
+	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
+
+	var publicIP string
+	var publicPort int
+
+	// Send the request and read the response
+	err = client.Do(message, func(res stun.Event) {
+		if res.Error != nil {
+			log.Fatalf("STUN request failed: %v", res.Error)
+		}
+
+		var xorAddr stun.XORMappedAddress
+		if err := xorAddr.GetFrom(res.Message); err != nil {
+			log.Fatalf("Failed to get public address from STUN response: %v", err)
+		}
+
+		publicIP = xorAddr.IP.String()
+		publicPort = xorAddr.Port
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("Failed to get public IP: %v", err)
+	}
+
+	return publicIP, publicPort, nil
+}
+
 // Register the peer with the tracker
-func registerPeer(peerID, peerIP, peerPort, trackerURL string) {
-	peer := map[string]string{
+func registerPeer(peerID, publicIP string, publicPort int, trackerURL string) {
+	peer := map[string]interface{}{
 		"id":   peerID,
-		"ip":   peerIP,
-		"port": peerPort,
+		"ip":   publicIP,
+		"port": publicPort,
 	}
 
 	peerJSON, _ := json.Marshal(peer)
